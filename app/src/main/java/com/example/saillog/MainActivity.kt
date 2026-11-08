@@ -14,7 +14,10 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.text.InputType
 import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -85,6 +88,7 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btnShare).setOnClickListener { shareLast() }
         findViewById<Button>(R.id.btnBattery).setOnClickListener { requestBatteryExemption() }
+        findViewById<Button>(R.id.btnSettings).setOnClickListener { showSettings() }
     }
 
     override fun onStart() {
@@ -234,6 +238,43 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
         }
+    }
+
+    // ---------- settings ----------
+
+    private fun showSettings() {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+        }
+        fun field(label: String, value: String, type: Int): EditText {
+            box.addView(TextView(this).apply { text = label })
+            return EditText(this).apply {
+                setText(value); inputType = type
+                box.addView(this)
+            }
+        }
+        val boat = field("Boat name (used in the GPX file name)", Prefs.boatName(this), InputType.TYPE_CLASS_TEXT)
+        val interval = field(
+            "Log interval (seconds, 1–3600)", Prefs.logIntervalSec(this).toString(), InputType.TYPE_CLASS_NUMBER
+        )
+        val stopKn = field(
+            "Auto-stop above (knots)", fmtKn(Prefs.autoStopKn(this)),
+            InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+        )
+        AlertDialog.Builder(this)
+            .setTitle("Settings")
+            .setView(box)
+            .setPositiveButton("Save") { _, _ ->
+                val i = interval.text.toString().toIntOrNull()?.coerceIn(1, 3600) ?: Prefs.logIntervalSec(this)
+                val k = stopKn.text.toString().replace(',', '.').toFloatOrNull()?.coerceIn(1f, 200f)
+                    ?: Prefs.autoStopKn(this).toFloat()
+                Prefs.saveSettings(this, boat.text.toString().trim(), i, k)
+                toast(if (TrackingService.running) "Saved – applies from the next log" else "Saved")
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun shareLast() {

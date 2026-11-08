@@ -23,10 +23,8 @@ class TrackingService : Service(), LocationListener {
     companion object {
         const val ACTION_STOP = "com.example.saillog.STOP"
 
-        /** Logging stops automatically when speed stays above this (e.g. you've left the boat by car). */
-        const val AUTO_STOP_KN = 15.0
-        const val AUTO_STOP_FIXES = 3          // consecutive fixes above the limit before stopping
-        const val MIN_STORE_INTERVAL_MS = 2000L // log a point at most every 2 s
+        /** Consecutive fixes above the auto-stop speed before logging stops (filters GPS spikes). */
+        const val AUTO_STOP_FIXES = 3
         const val MAX_ACCURACY_M = 50f
 
         private const val CH_TRACK = "tracking"
@@ -43,6 +41,8 @@ class TrackingService : Service(), LocationListener {
     private var lastStored = 0L
     private var fastCount = 0
     private var lastNotif = 0L
+    private var intervalMs = 1000L
+    private var autoStopKn = 15.0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -91,6 +91,8 @@ class TrackingService : Service(), LocationListener {
         if (resume) TrackRepo.loadBackup(this) else TrackRepo.reset(this)
         TrackRepo.status = "Waiting for GPS fix…"
         fastCount = 0
+        intervalMs = Prefs.logIntervalSec(this) * 1000L
+        autoStopKn = Prefs.autoStopKn(this)
         lastStored = TrackRepo.points.lastOrNull()?.time ?: 0L
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -112,16 +114,16 @@ class TrackingService : Service(), LocationListener {
         TrackRepo.currentSpeedKn = kn
         TrackRepo.status = "Logging"
 
-        if (kn > AUTO_STOP_KN) {
+        if (kn > autoStopKn) {
             fastCount++
             if (fastCount >= AUTO_STOP_FIXES) {
-                stopLogging("Auto-stopped: speed over ${AUTO_STOP_KN.toInt()} kn")
+                stopLogging("Auto-stopped: speed over ${fmtKn(autoStopKn)} kn")
             }
             return // don't store suspicious fixes
         }
         fastCount = 0
 
-        if (loc.time - lastStored >= MIN_STORE_INTERVAL_MS) {
+        if (loc.time - lastStored >= intervalMs - 250) {
             lastStored = loc.time
             TrackRepo.add(this, TrackPoint(loc.time, loc.latitude, loc.longitude, kn))
         }
@@ -156,7 +158,7 @@ class TrackingService : Service(), LocationListener {
         getSystemService(NotificationManager::class.java).notify(
             EVENT_ID,
             NotificationCompat.Builder(this, CH_EVENTS)
-                .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+                .setSmallIcon(R.drawable.ic_notif)
                 .setContentTitle("SailLog stopped")
                 .setContentText(result)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(result))
@@ -193,7 +195,7 @@ class TrackingService : Service(), LocationListener {
             PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CH_TRACK)
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle("SailLog recording")
             .setContentText(text)
             .setContentIntent(open)

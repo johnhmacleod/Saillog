@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- mainsail -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M53.5,22 V62 H78 Z" />
+    <!-- jib -->
+    <path android:fillColor="#FFE3F2FD" android:pathData="M51,28 V62 H31 Z" />
+    <!-- mast -->
+    <path android:fillColor="#FFCFD8DC" android:pathData="M51.5,20 H53.5 V68 H51.5 Z" />
+    <!-- hull -->
+    <path android:fillColor="#FFFFA726" android:pathData="M27,67 H81 C79,75 73,80 65,80 H43 C35,80 29,75 27,67 Z" />
+    <!-- wave -->
+    <path
+        android:strokeColor="#FF4FC3F7"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M40,83 q3.5,-3 7,0 t7,0 t7,0 t7,0" />
+</vector>

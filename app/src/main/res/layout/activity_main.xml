@@ -72,9 +72,23 @@
             android:text="Share last GPX" />
     </LinearLayout>
 
-    <Button
-        android:id="@+id/btnBattery"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Disable battery optimisation" />
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnSettings"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Settings" />
+
+        <Button
+            android:id="@+id/btnBattery"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Battery optimisation" />
+    </LinearLayout>
 </LinearLayout>

@@ -14,6 +14,10 @@ import kotlin.math.max
 
 const val MS_TO_KN = 1.943844
 
+/** 15.0 -> "15", 12.5 -> "12.5" */
+fun fmtKn(v: Double): String =
+    if (v % 1.0 == 0.0) v.toInt().toString() else String.format(Locale.US, "%.1f", v)
+
 data class TrackPoint(val time: Long, val lat: Double, val lon: Double, val speedKn: Double)
 
 object Prefs {
@@ -26,6 +30,14 @@ object Prefs {
     fun setLastGpx(c: Context, uri: String) = sp(c).edit().putString("gpx_uri", uri).apply()
     fun batteryAsked(c: Context) = sp(c).getBoolean("battery_asked", false)
     fun setBatteryAsked(c: Context) = sp(c).edit().putBoolean("battery_asked", true).apply()
+
+    // ---- user settings ----
+    fun boatName(c: Context): String = sp(c).getString("boat", "") ?: ""
+    fun logIntervalSec(c: Context): Int = sp(c).getInt("interval", 1)
+    fun autoStopKn(c: Context): Double = sp(c).getFloat("autostop", 15f).toDouble()
+    fun saveSettings(c: Context, boat: String, intervalSec: Int, autoStopKn: Float) =
+        sp(c).edit().putString("boat", boat).putInt("interval", intervalSec)
+            .putFloat("autostop", autoStopKn).apply()
 }
 
 /** Shared in-process state. Only touched from the main thread. */
@@ -81,7 +93,7 @@ object TrackRepo {
 }
 
 object GpxExporter {
-    /** Writes Documents/SailLog/saillog_<start>.gpx and returns its display name, or null on failure. */
+    /** Writes Documents/SailLog/<boat>_<start>.gpx and returns its display name, or null on failure. */
     fun export(ctx: Context, pts: List<TrackPoint>): String? {
         if (pts.isEmpty()) return null
         return try {
@@ -89,7 +101,11 @@ object GpxExporter {
                 timeZone = TimeZone.getTimeZone("UTC")
             }
             val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(pts.first().time))
-            val name = "saillog_$stamp.gpx"
+            val boat = Prefs.boatName(ctx).trim()
+            val safe = boat.replace(Regex("[^\\p{L}\\p{N}_-]+"), "_").trim('_').ifEmpty { "saillog" }
+            val name = "${safe}_$stamp.gpx"
+            val title = boat.ifEmpty { "SailLog" }
+                .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
             val sb = StringBuilder()
             sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
@@ -97,7 +113,7 @@ object GpxExporter {
             sb.append("xmlns=\"http://www.topografix.com/GPX/1/1\" ")
             sb.append("xmlns:gpxtpx=\"http://www.garmin.com/xmlschemas/TrackPointExtension/v1\">\n")
             sb.append("<metadata><time>${iso.format(Date(pts.first().time))}</time></metadata>\n")
-            sb.append("<trk><name>SailLog $stamp</name><trkseg>\n")
+            sb.append("<trk><name>$title $stamp</name><trkseg>\n")
             for (p in pts) {
                 sb.append(
                     String.format(
