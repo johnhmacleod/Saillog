@@ -1,8 +1,12 @@
 package com.example.saillog
 
+import android.content.ClipData
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.location.Location
+import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import java.io.File
@@ -92,7 +96,51 @@ object TrackRepo {
     }
 }
 
+data class SavedTrack(val uri: Uri, val name: String, val modifiedSec: Long, val sizeBytes: Long)
+
+object Sharing {
+    /** Chooser for one or several GPX files. */
+    fun intent(uris: List<Uri>): Intent {
+        val send = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+        }
+        send.type = "application/gpx+xml"
+        send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val clip = ClipData.newRawUri("GPX", uris[0])
+        uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+        send.clipData = clip
+        return Intent.createChooser(send, "Share GPX")
+    }
+}
+
 object GpxExporter {
+    /** All GPX files this app saved in Documents/SailLog, newest first. */
+    fun listSaved(ctx: Context): List<SavedTrack> {
+        val out = ArrayList<SavedTrack>()
+        val collection = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.DATE_MODIFIED, MediaStore.MediaColumns.SIZE
+        )
+        val selection = "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND " +
+            "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+        val args = arrayOf(Environment.DIRECTORY_DOCUMENTS + "/SailLog%", "%.gpx")
+        try {
+            ctx.contentResolver.query(
+                collection, projection, selection, args, "${MediaStore.MediaColumns.DATE_MODIFIED} DESC"
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    out.add(
+                        SavedTrack(ContentUris.withAppendedId(collection, c.getLong(0)), c.getString(1), c.getLong(2), c.getLong(3))
+                    )
+                }
+            }
+        } catch (_: Exception) { }
+        return out
+    }
+
     /** Writes Documents/SailLog/<boat>_<start>.gpx and returns its display name, or null on failure. */
     fun export(ctx: Context, pts: List<TrackPoint>): String? {
         if (pts.isEmpty()) return null

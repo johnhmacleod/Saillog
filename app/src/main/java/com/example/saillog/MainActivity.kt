@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity() {
         btnSchedule.setOnClickListener {
             if (Prefs.scheduledAt(this) > System.currentTimeMillis()) cancelSchedule() else pickDateTime()
         }
-        findViewById<Button>(R.id.btnShare).setOnClickListener { shareLast() }
+        findViewById<Button>(R.id.btnShare).setOnClickListener { showSavedTracks() }
         findViewById<Button>(R.id.btnBattery).setOnClickListener { requestBatteryExemption() }
         findViewById<Button>(R.id.btnSettings).setOnClickListener { showSettings() }
     }
@@ -277,14 +277,34 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun shareLast() {
-        val uri = Prefs.lastGpxUri(this)?.let { Uri.parse(it) }
-        if (uri == null) { toast("No GPX saved yet"); return }
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "application/gpx+xml"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        startActivity(Intent.createChooser(send, "Share GPX"))
+    // ---------- saved tracks ----------
+
+    private fun showSavedTracks() {
+        val tracks = GpxExporter.listSaved(this)
+        if (tracks.isEmpty()) { toast("No saved tracks found in Documents/SailLog"); return }
+        val fmt = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT)
+        val labels = tracks.map {
+            "${it.name}\n${fmt.format(Date(it.modifiedSec * 1000))} · ${maxOf(1L, it.sizeBytes / 1024)} KB"
+        }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle("Saved tracks – tap to share")
+            .setItems(labels) { _, which -> startActivity(Sharing.intent(listOf(tracks[which].uri))) }
+            .setNeutralButton("Select several…") { _, _ -> pickSeveral(tracks, labels) }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun pickSeveral(tracks: List<SavedTrack>, labels: Array<String>) {
+        val checked = BooleanArray(tracks.size)
+        AlertDialog.Builder(this)
+            .setTitle("Select tracks to share")
+            .setMultiChoiceItems(labels, checked) { _, i, on -> checked[i] = on }
+            .setPositiveButton("Share") { _, _ ->
+                val sel = tracks.filterIndexed { i, _ -> checked[i] }.map { it.uri }
+                if (sel.isEmpty()) toast("Nothing selected") else startActivity(Sharing.intent(sel))
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 }

@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.Uri
 import android.os.Bundle
 import android.os.IBinder
 import android.os.Looper
@@ -155,17 +156,23 @@ class TrackingService : Service(), LocationListener {
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
-        getSystemService(NotificationManager::class.java).notify(
-            EVENT_ID,
-            NotificationCompat.Builder(this, CH_EVENTS)
-                .setSmallIcon(R.drawable.ic_notif)
-                .setContentTitle("SailLog stopped")
-                .setContentText(result)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(result))
-                .setContentIntent(open)
-                .setAutoCancel(true)
-                .build()
-        )
+        val eventBuilder = NotificationCompat.Builder(this, CH_EVENTS)
+            .setSmallIcon(R.drawable.ic_notif)
+            .setContentTitle("SailLog stopped")
+            .setContentText(result)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(result))
+            .setContentIntent(open)
+            .setAutoCancel(true)
+        if (name != null) {
+            Prefs.lastGpxUri(this)?.let { u ->
+                val share = PendingIntent.getActivity(
+                    this, 2, Sharing.intent(listOf(Uri.parse(u))),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+                eventBuilder.addAction(0, "Share GPX", share)
+            }
+        }
+        getSystemService(NotificationManager::class.java).notify(EVENT_ID, eventBuilder.build())
 
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
